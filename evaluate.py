@@ -1,4 +1,3 @@
-# evaluate_global.py
 import torch
 import numpy as np
 from torchvision import datasets, transforms
@@ -6,9 +5,7 @@ from torchvision import datasets, transforms
 from model import MNISTCNN
 model = MNISTCNN()
 
-# -------------------------
 # Load aggregated weights
-# -------------------------
 def load_npz_into_model(model, npz_path):
     data = np.load(npz_path)
     state_dict = model.state_dict()
@@ -18,9 +15,7 @@ def load_npz_into_model(model, npz_path):
 
     model.load_state_dict(state_dict)
 
-# -------------------------
 # Evaluation
-# -------------------------
 def main():
     model = MNISTCNN()
     model.eval()

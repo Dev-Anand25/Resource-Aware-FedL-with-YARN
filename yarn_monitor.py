@@ -1,10 +1,8 @@
-# yarn_monitor.py
 import requests
 
 class YarnMonitor:
     """
     Reads cluster metrics from YARN ResourceManager REST API.
-    Example RM URL: http://rm-host:8088
     """
     def __init__(self, rm_base_url: str, timeout: float = 5.0):
         self.rm = rm_base_url.rstrip("/")

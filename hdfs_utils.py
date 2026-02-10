@@ -1,4 +1,3 @@
-# hdfs_utils.py
 import subprocess
 from pathlib import Path
 from typing import List
@@ -12,7 +11,6 @@ def hdfs_mkdir(hdfs_path: str) -> None:
     run(["hdfs", "dfs", "-mkdir", "-p", hdfs_path])
 
 def hdfs_put(local_path: str, hdfs_path: str) -> None:
-    # overwrite
     run(["hdfs", "dfs", "-put", "-f", local_path, hdfs_path])
 
 def hdfs_get(hdfs_path: str, local_path: str) -> None:

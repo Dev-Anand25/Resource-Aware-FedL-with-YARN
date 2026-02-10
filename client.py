@@ -1,4 +1,3 @@
-# client.py
 import argparse
 from typing import Dict, List, Tuple
 

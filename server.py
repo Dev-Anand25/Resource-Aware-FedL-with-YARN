@@ -1,4 +1,3 @@
-# server.py
 import argparse
 import json
 import os
@@ -17,18 +16,11 @@ import time
 import csv
 from pathlib import Path
 
-# ---- CSV logging schema (stable!) ----
 CSV_FIELDS = [
     "round", "phase", "t",
-
-    # YARN (cluster-level)
     "total_mb", "allocated_mb", "free_mb",
     "total_vcores", "allocated_vcores", "free_vcores",
-
-    # Spark sizing
     "spark_executors", "spark_executor_cores", "spark_executor_mem_gb",
-
-    # Summary
     "agg_seconds", "num_clients_used",
 ]
 
@@ -36,7 +28,7 @@ def append_csv(path: str, row: dict):
     Path(path).parent.mkdir(parents=True, exist_ok=True)
     file_exists = Path(path).exists()
 
-    safe = {k: row.get(k, "") for k in CSV_FIELDS}  # fill missing keys
+    safe = {k: row.get(k, "") for k in CSV_FIELDS} 
 
     with open(path, "a", newline="") as f:
         w = csv.DictWriter(f, fieldnames=CSV_FIELDS, extrasaction="ignore")
@@ -81,14 +73,11 @@ class ResourceAwareSparkFedAvg(fl.server.strategy.Strategy):
         self.current_round = 0
         self.initial_parameters: Optional[fl.common.Parameters] = None
 
-    # ---- Strategy API ----
     def initialize_parameters(self, client_manager):
-        # Let clients initialize if not set
         return self.initial_parameters
 
     def configure_fit(self, server_round, parameters, client_manager):
         self.current_round = server_round
-        # sample clients
         num_available = client_manager.num_available()
         num_sample = max(self.min_clients, int(self.fraction_fit * num_available))
         clients = client_manager.sample(num_clients=num_sample, min_num_clients=self.min_clients)
@@ -104,9 +93,7 @@ class ResourceAwareSparkFedAvg(fl.server.strategy.Strategy):
         if len(results) < self.min_clients:
             return None, {}
 
-    # -----------------------------
     # Prepare HDFS directories
-    # -----------------------------
         round_dir = f"{self.hdfs_base}/rounds/r_{server_round}"
         upd_dir = f"{round_dir}/updates"
         meta_dir = f"{round_dir}/meta"
@@ -123,15 +110,12 @@ class ResourceAwareSparkFedAvg(fl.server.strategy.Strategy):
         with tempfile.TemporaryDirectory() as td:
             td_path = Path(td)
 
-            # -----------------------------
             # Save client updates -> HDFS
-            # -----------------------------
             for client, fitres in results:
                 cid = client.cid
                 nds = params_to_ndarrays(fitres.parameters)
 
                 local_npz = td_path / f"client_{cid}.npz"
-                # Make sure it stays numeric (no pickle)
                 np.savez(local_npz, *nds)
 
                 hdfs_npz_path = f"{upd_dir}/client_{cid}.npz"
@@ -151,9 +135,7 @@ class ResourceAwareSparkFedAvg(fl.server.strategy.Strategy):
             hdfs_manifest_path = f"{meta_dir}/manifest.json"
             hdfs_put(str(local_manifest), hdfs_manifest_path)
 
-            # -----------------------------
             # Resource-aware Spark sizing
-            # -----------------------------
             free0 = self.rm.free_resources()
             free_vcores = int(free0["free_vcores"])
             free_mb = int(free0["free_mb"])
@@ -161,7 +143,7 @@ class ResourceAwareSparkFedAvg(fl.server.strategy.Strategy):
             est_exec = free_vcores // max(1, self.cores_per_exec)
             num_exec = clamp(est_exec, self.min_exec, self.max_exec)
 
-            usable_mb = int(free_mb * 0.8)  # keep headroom
+            usable_mb = int(free_mb * 0.8)
             mem_per_exec_mb = max(1024, usable_mb // max(1, num_exec))
             mem_per_exec_gb = clamp(mem_per_exec_mb // 1024, 1, self.exec_mem_gb_cap)
 
@@ -170,11 +152,7 @@ class ResourceAwareSparkFedAvg(fl.server.strategy.Strategy):
                 mem_per_exec_gb = 1
 
             hdfs_out = f"{out_dir}/global_round_{server_round}.npz"
-
-            # IMPORTANT:
-            # In YARN *cluster* mode, your executors run in YARN containers.
-            # This python path must exist inside those containers (i.e., on the node).
-            VENV_PY = "/home/anand/Projects/FedL/.venv/bin/python"
+            VENV_PY = ".venv/bin/python"
 
             cmd = [
                 self.spark_submit,
@@ -201,9 +179,7 @@ class ResourceAwareSparkFedAvg(fl.server.strategy.Strategy):
             print("\n[Server] YARN free (pre-size):", free0)
             print("[Server] Launching:", " ".join(cmd), "\n")
 
-            # -----------------------------
             # BEFORE Spark job
-            # -----------------------------
             free_before = self.rm.free_resources()
 
             append_csv(log_path, {
@@ -221,15 +197,13 @@ class ResourceAwareSparkFedAvg(fl.server.strategy.Strategy):
                 "allocated_vcores": free_before["allocated_vcores"],
                 "free_vcores": free_before["free_vcores"],
 
-                # Spark config (planned)
+                # Spark config
                 "spark_executors": num_exec,
                 "spark_executor_cores": self.cores_per_exec,
                 "spark_executor_mem_gb": mem_per_exec_gb,
             })
 
-            # -----------------------------
             # DURING Spark job (poll)
-            # -----------------------------
             t0 = time.time()
             p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
 
@@ -259,11 +233,11 @@ class ResourceAwareSparkFedAvg(fl.server.strategy.Strategy):
 
                 time.sleep(0.5)
 
-            # Wait for process output (and final return code)
+            # Wait for process output and measure aggregation time
             stdout, stderr = p.communicate()
             agg_seconds = round(time.time() - t0, 3)
 
-            # Save Spark logs (very useful)
+            # Save Spark logs 
             (Path("./logs") / f"spark_round_{server_round}.stdout.txt").write_text(stdout or "")
             (Path("./logs") / f"spark_round_{server_round}.stderr.txt").write_text(stderr or "")
 
@@ -271,13 +245,11 @@ class ResourceAwareSparkFedAvg(fl.server.strategy.Strategy):
             print("\n[Server] Spark STDOUT (last 60 lines):\n", "\n".join((stdout or "").splitlines()[-60:]))
             print("\n[Server] Spark STDERR (last 60 lines):\n", "\n".join((stderr or "").splitlines()[-60:]))
 
-            # Fail fast if Spark failed
+            # if Spark failed
             if p.returncode != 0:
                 raise RuntimeError("Spark aggregation failed")
 
-            # -----------------------------
             # AFTER Spark job
-            # -----------------------------
             free_after = self.rm.free_resources()
 
             append_csv(log_path, {
@@ -305,9 +277,7 @@ class ResourceAwareSparkFedAvg(fl.server.strategy.Strategy):
 
 
 
-            # -----------------------------
             # Download aggregated model
-            # -----------------------------
             local_out = td_path / f"global_round_{server_round}.npz"
             if not hdfs_exists(hdfs_out):
                 raise RuntimeError(f"Aggregated model not found in HDFS: {hdfs_out}")

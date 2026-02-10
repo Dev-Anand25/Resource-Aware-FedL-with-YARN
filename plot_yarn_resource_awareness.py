@@ -48,7 +48,7 @@ def main():
     outdir = Path(args.outdir)
     outdir.mkdir(parents=True, exist_ok=True)
 
-    # Plot 1: agg_seconds vs round
+    # Plot: agg_seconds vs round
     plt.figure()
     plt.plot(summary["round"], summary["agg_seconds"], marker="o")
     plt.xlabel("Round")
@@ -60,7 +60,7 @@ def main():
     plt.savefig(p1, dpi=200)
     print(f"Saved: {p1}")
 
-    # Plot 2: free_mb_mean vs agg_seconds
+    # Plot: free_mb_mean vs agg_seconds
     plt.figure()
     plt.scatter(summary["free_mb_mean"], summary["agg_seconds"])
     plt.xlabel("Mean free MB during aggregation")
@@ -72,7 +72,7 @@ def main():
     plt.savefig(p2, dpi=200)
     print(f"Saved: {p2}")
 
-    # Plot 3: free_vcores_mean vs agg_seconds
+    # Plot: free_vcores_mean vs agg_seconds
     plt.figure()
     plt.scatter(summary["free_vcores_mean"], summary["agg_seconds"])
     plt.xlabel("Mean free vcores during aggregation")
